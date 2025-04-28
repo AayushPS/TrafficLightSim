@@ -1,4 +1,5 @@
 package ApplicationEVENTS.setup;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -6,7 +7,7 @@ public class DisplaySimulator {
 
     // Map of numbers to their corresponding 7-segment bit patterns
     private static final Map<Integer, String> sevenSegmentPatterns = new HashMap<>();
-    
+
     static {
         // Initialize the segment patterns for 0-9
         sevenSegmentPatterns.put(0, "1111110");
@@ -26,22 +27,19 @@ public class DisplaySimulator {
         return sevenSegmentPatterns.getOrDefault(number, "Invalid number");
     }
 
-    // Simulate displaying a time on the seven-segment display
-    public static void displayTime(int hours, int minutes) {
-        // Display hours (can be in two digits)
-        String hourTens = String.valueOf(hours / 10);  // Tens place of hours
-        String hourOnes = String.valueOf(hours % 10);  // Ones place of hours
+    // Simulate displaying countdown time remaining on the seven-segment display
+    public static void displayCountdown(int secondsRemaining) {
+        if (secondsRemaining < 0 || secondsRemaining > 99) {
+            System.out.println("Invalid countdown value. Must be between 0 and 99 seconds.");
+            return;
+        }
 
-        // Display minutes (two digits)
-        String minuteTens = String.valueOf(minutes / 10);  // Tens place of minutes
-        String minuteOnes = String.valueOf(minutes % 10);  // Ones place of minutes
+        int tensPlace = secondsRemaining / 10;
+        int onesPlace = secondsRemaining % 10;
 
-        // Display each digit as its pattern
-        System.out.println("Displaying time " + hours + ":" + minutes);
+        System.out.println("Displaying countdown: " + secondsRemaining + " seconds");
 
-        System.out.println("Hour Tens: " + getSignalPatternForNumber(Integer.parseInt(hourTens)));
-        System.out.println("Hour Ones: " + getSignalPatternForNumber(Integer.parseInt(hourOnes)));
-        System.out.println("Minute Tens: " + getSignalPatternForNumber(Integer.parseInt(minuteTens)));
-        System.out.println("Minute Ones: " + getSignalPatternForNumber(Integer.parseInt(minuteOnes)));
+        System.out.println("Tens Digit:  " + getSignalPatternForNumber(tensPlace));
+        System.out.println("Ones Digit:  " + getSignalPatternForNumber(onesPlace));
     }
 }

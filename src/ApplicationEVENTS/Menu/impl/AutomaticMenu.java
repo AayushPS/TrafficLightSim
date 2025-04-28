@@ -2,8 +2,7 @@ package ApplicationEVENTS.Menu.impl;
 
 import ApplicationEVENTS.ApplicationContext;
 import ApplicationEVENTS.Menu.menu;
-import ApplicationEVENTS.models.CameraUpdate;
-import ApplicationEVENTS.setup.DisplaySimulator;
+import ApplicationEVENTS.setup.DisplayManager;
 import ApplicationEVENTS.setup.TrafficSignalTimer;
 
 import java.io.BufferedReader;
@@ -88,31 +87,29 @@ public class AutomaticMenu implements menu {
                     Map.of("car", totalVehicles)
             );
 
-            // Clearer output with format
-            System.out.println("\n---- Automatic Mode Cycle ----");
-            System.out.println("Current Crossing: Crossing " + current);
+            System.out.println("==== Traffic Cycle ====");
             for (int i = 1; i <= crossingCount; i++) {
                 if (i == current) {
-                    System.out.printf("[GREEN] Crossing %d: %.1f seconds (vehicles=%d)%n", i, greenTime, totalVehicles);
-                    // Show the signal on the display simulator
-                    DisplaySimulator.displayTime(current, (int) greenTime);
+                    System.out.printf("Crossing %d: GREEN for %.1f seconds (vehicles=%d)%n",
+                            i, greenTime, totalVehicles);
                 } else {
-                    System.out.printf("[RED] Crossing %d: No green light.%n", i);
+                    System.out.printf("Crossing %d: RED%n", i);
                 }
             }
-            System.out.println("-------------------------------");
+
+            // Send the countdown display signal
+            DisplayManager.showCountdown((int) Math.round(greenTime));
+
             sleepSeconds((int) Math.round(greenTime));
 
-            System.out.println("[YELLOW] Crossing " + current + " switching to Yellow.");
-            // Show the signal on the display simulator
-            DisplaySimulator.displayTime(current, 5);
+            System.out.printf("Crossing %d: YELLOW for %d seconds%n", current, 5);
             sleepSeconds(5);
 
             current = current % crossingCount + 1;
         }
 
         // Shutdown
-        System.out.println("\nAutomatic Mode stopped.");
+        System.out.println("Stopping Automatic Mode...");
         pool.shutdownNow();
         context.getMainMenu().start();
     }
@@ -120,13 +117,12 @@ public class AutomaticMenu implements menu {
     private void handleClient(Socket sock) {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()))) {
             String line = in.readLine();
-            CameraUpdate update = parseCameraInput(line);
-            if (update != null) {
-                latestCounts.put(
-                    update.getCrossing() + "-" + update.getLane(),
-                    update.getCount()
-                );
-                System.out.printf("[Received] %s%n", update);
+            int[] data = parseCameraInput(line);
+            int crossing = data[0], lane = data[1], count = data[2];
+            if (crossing > 0 && lane > 0) {
+                latestCounts.put(crossing + "-" + lane, count);
+                System.out.printf("[Received] crossing=%d lane=%d count=%d%n",
+                        crossing, lane, count);
             }
         } catch (IOException ignored) {
         } finally {
@@ -135,32 +131,28 @@ public class AutomaticMenu implements menu {
     }
 
     /**
-     * Parses a camera message into a CameraUpdate object.
+     * Parses a camera message in format "crossing:1,lane:2,count:5" into {crossing, lane, count}.
      */
-    private CameraUpdate parseCameraInput(String message) {
-        if (message == null) return null;
-        int crossing = 0, lane = 0, count = 0;
+    private int[] parseCameraInput(String message) {
+        int[] result = new int[3];
+        if (message == null) return result;
         String[] pairs = message.split(",");
         for (String pair : pairs) {
             String[] kv = pair.split(":");
             if (kv.length != 2) continue;
             String key = kv[0].trim().toLowerCase();
-            try {
-                int val = Integer.parseInt(kv[1].trim());
-                switch (key) {
-                    case "crossing": crossing = val; break;
-                    case "lane":     lane = val; break;
-                    case "count":    count = val; break;
-                    default: break;
-                }
-            } catch (NumberFormatException ignored) {}
+            int val;
+            try { val = Integer.parseInt(kv[1].trim()); }
+            catch (NumberFormatException e) { continue; }
+            switch (key) {
+                case "crossing": result[0] = val; break;
+                case "lane":     result[1] = val; break;
+                case "count":    result[2] = val; break;
+                default: break;
+            }
         }
-        if (crossing > 0 && lane > 0) {
-            return new CameraUpdate(crossing, lane, count);
-        }
-        return null;
+        return result;
     }
-
 
     private void sleepSeconds(int seconds) {
         for (int i = 0; i < seconds && running.get(); i++) {
