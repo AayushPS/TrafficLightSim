@@ -21,16 +21,6 @@ public class DisplaySimulator {
         sevenSegmentPatterns.put(9, "1111011");
     }
 
-    public static void main(String[] args) {
-        // Test: simulate sending signal for number "7" to the display
-        int numberToDisplay = 7;
-        String signalPattern = getSignalPatternForNumber(numberToDisplay);
-        System.out.println("Signal for " + numberToDisplay + ": " + signalPattern);
-
-        // You can also extend this to represent a time
-        displayTime(15, 30);  // 15:30 -> 3:30 PM
-    }
-
     // Get the signal pattern for a given number
     private static String getSignalPatternForNumber(int number) {
         return sevenSegmentPatterns.getOrDefault(number, "Invalid number");
