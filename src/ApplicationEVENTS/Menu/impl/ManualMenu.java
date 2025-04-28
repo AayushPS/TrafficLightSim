@@ -5,9 +5,10 @@ import ApplicationEVENTS.Menu.menu;
 import ApplicationEVENTS.setup.DisplayManager;
 import ApplicationEVENTS.setup.TrafficSignalTimer;
 
-import java.util.Scanner;
+import java.util.Map;
 
 public class ManualMenu implements menu {
+
     private ApplicationContext context;
 
     public ManualMenu() {
@@ -19,46 +20,40 @@ public class ManualMenu implements menu {
         printMenuHeader();
 
         int crossingCount = context.getCrossingint();
-        Scanner console = new Scanner(System.in);
+        int totalCycleTime = 60;  // Example: total cycle time for all crossings
+        int currentCrossing = 1;
 
         while (true) {
-            System.out.println("Enter crossing number (1 to " + crossingCount + " or 0 to quit):");
-            int crossing = console.nextInt();
-            if (crossing == 0) break;
-
-            if (crossing < 1 || crossing > crossingCount) {
-                System.out.println("Invalid crossing number.");
-                continue;
+            // For each crossing, calculate green time and countdown
+            System.out.println("==== Manual Mode ====");
+            for (int i = 1; i <= crossingCount; i++) {
+                int timeRemaining;
+                if (i == currentCrossing) {
+                    // Active crossing: show green time
+                    int totalVehicles = 0;  // Update this to use actual vehicle data
+                    double greenTime = TrafficSignalTimer.calculateGreenLightTime(Map.of("car", totalVehicles));
+                    timeRemaining = (int) greenTime;
+                    System.out.printf("Crossing %d: GREEN for %.1f seconds%n", i, greenTime);
+                    DisplayManager.showCountdownForCrossing(i, timeRemaining, totalCycleTime, (int) greenTime);
+                } else {
+                    // Non-active crossings: show time remaining until green
+                    int remainingTime = totalCycleTime - (i - 1); // Adjust based on the crossing order
+                    System.out.printf("Crossing %d: RED (remaining time for turn to green: %d seconds)%n", i, remainingTime);
+                    DisplayManager.showCountdownForCrossing(i, remainingTime, totalCycleTime, 0);
+                }
             }
 
-            System.out.println("Enter green light duration (seconds):");
-            int greenTime = console.nextInt();
-            System.out.println("Enter yellow light duration (seconds):");
-            int yellowTime = console.nextInt();
-
-            // Simulate manual light control
-            System.out.printf("Crossing %d: GREEN for %d seconds%n", crossing, greenTime);
-            DisplayManager.showCountdown(greenTime);  // Show countdown
-            sleepSeconds(greenTime);
-
-            System.out.printf("Crossing %d: YELLOW for %d seconds%n", crossing, yellowTime);
-            DisplayManager.showCountdown(yellowTime);  // Show countdown
-            sleepSeconds(yellowTime);
+            // Simulate user input to move to the next crossing (or break to stop)
+            currentCrossing = (currentCrossing % crossingCount) + 1;
+            try { Thread.sleep(5000); } catch (InterruptedException e) { break; }
         }
 
-        System.out.println("Manual Mode Stopped.");
         context.getMainMenu().start();
-    }
-
-    private void sleepSeconds(int seconds) {
-        for (int i = 0; i < seconds; i++) {
-            try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
     }
 
     @Override
     public void printMenuHeader() {
         System.out.println("System Started in Manual Mode");
-        System.out.println("Type '0' to exit Manual Mode.");
+        System.out.println("Switching between crossings...");
     }
 }

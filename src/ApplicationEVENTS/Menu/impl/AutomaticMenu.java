@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class AutomaticMenu implements menu {
+
     private ApplicationContext context;
     private static final int PORT = 7777;
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -32,6 +33,7 @@ public class AutomaticMenu implements menu {
         printMenuHeader();
 
         int crossingCount = context.getCrossingint();
+        int totalCycleTime = 60;  // Example: total cycle time for all crossings
         ExecutorService pool = Executors.newCachedThreadPool();
 
         // Listener thread: accepts incoming connections
@@ -82,7 +84,12 @@ public class AutomaticMenu implements menu {
                 perCrossing.putIfAbsent(i, 0);
             }
 
-            int totalVehicles = perCrossing.get(current);
+            // Correct casting and calculation
+            Integer totalVehicles = perCrossing.get(current);  // Ensure casting here
+            if (totalVehicles == null) {
+                totalVehicles = 0;  // Handle null if no data for the crossing
+            }
+
             double greenTime = TrafficSignalTimer.calculateGreenLightTime(
                     Map.of("car", totalVehicles)
             );
@@ -90,80 +97,47 @@ public class AutomaticMenu implements menu {
             System.out.println("==== Traffic Cycle ====");
             for (int i = 1; i <= crossingCount; i++) {
                 if (i == current) {
+                    // Active crossing: show countdown for green
                     System.out.printf("Crossing %d: GREEN for %.1f seconds (vehicles=%d)%n",
                             i, greenTime, totalVehicles);
+                    DisplayManager.showCountdownForCrossing(i, (int) greenTime, totalCycleTime, (int) greenTime);
                 } else {
-                    System.out.printf("Crossing %d: RED%n", i);
+                    // Non-active crossings: show countdown until green (time remaining)
+                    int remainingTime = totalCycleTime - (int) greenTime * (i - 1) % totalCycleTime;
+                    System.out.printf("Crossing %d: RED (remaining time for turn to green: %d seconds)%n", i, remainingTime);
+                    DisplayManager.showCountdownForCrossing(i, 0, totalCycleTime, (int) greenTime);
                 }
             }
 
-            // Send the countdown display signal
-            DisplayManager.showCountdown((int) Math.round(greenTime));
-
-            sleepSeconds((int) Math.round(greenTime));
-
-            System.out.printf("Crossing %d: YELLOW for %d seconds%n", current, 5);
-            sleepSeconds(5);
-
-            current = current % crossingCount + 1;
+            // Simulate the next crossing
+            current = (current % crossingCount) + 1;
+            try { Thread.sleep(5000); } catch (InterruptedException e) { break; }
         }
 
-        // Shutdown
-        System.out.println("Stopping Automatic Mode...");
-        pool.shutdownNow();
         context.getMainMenu().start();
-    }
-
-    private void handleClient(Socket sock) {
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()))) {
-            String line = in.readLine();
-            int[] data = parseCameraInput(line);
-            int crossing = data[0], lane = data[1], count = data[2];
-            if (crossing > 0 && lane > 0) {
-                latestCounts.put(crossing + "-" + lane, count);
-                System.out.printf("[Received] crossing=%d lane=%d count=%d%n",
-                        crossing, lane, count);
-            }
-        } catch (IOException ignored) {
-        } finally {
-            try { sock.close(); } catch (IOException ignored) {}
-        }
-    }
-
-    /**
-     * Parses a camera message in format "crossing:1,lane:2,count:5" into {crossing, lane, count}.
-     */
-    private int[] parseCameraInput(String message) {
-        int[] result = new int[3];
-        if (message == null) return result;
-        String[] pairs = message.split(",");
-        for (String pair : pairs) {
-            String[] kv = pair.split(":");
-            if (kv.length != 2) continue;
-            String key = kv[0].trim().toLowerCase();
-            int val;
-            try { val = Integer.parseInt(kv[1].trim()); }
-            catch (NumberFormatException e) { continue; }
-            switch (key) {
-                case "crossing": result[0] = val; break;
-                case "lane":     result[1] = val; break;
-                case "count":    result[2] = val; break;
-                default: break;
-            }
-        }
-        return result;
-    }
-
-    private void sleepSeconds(int seconds) {
-        for (int i = 0; i < seconds && running.get(); i++) {
-            try { Thread.sleep(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
     }
 
     @Override
     public void printMenuHeader() {
-        System.out.println("System Started in Auto Mode");
-        System.out.println("Listening for camera updates on port " + PORT);
-        System.out.println("Type 'stop' in Main Menu to exit Auto Mode.");
+        System.out.println("System Started in Automatic Mode");
+        System.out.println("Press 'stop' to interrupt the automatic mode.");
+    }
+
+    private void handleClient(Socket client) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
+            String message;
+            while ((message = reader.readLine()) != null) {
+                // Assuming the message contains crossing-lane data in "crossing-lane: vehicle_count" format
+                String[] parts = message.split(":");
+                if (parts.length == 2) {
+                    String crossingLane = parts[0].trim();
+                    int vehicleCount = Integer.parseInt(parts[1].trim());
+                    latestCounts.put(crossingLane, vehicleCount);
+                    System.out.println("Received update for " + crossingLane + ": " + vehicleCount + " vehicles");
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error handling client: " + e.getMessage());
+        }
     }
 }
