@@ -2,6 +2,7 @@ package ApplicationEVENTS.Menu.impl;
 
 import ApplicationEVENTS.ApplicationContext;
 import ApplicationEVENTS.Menu.menu;
+import ApplicationEVENTS.models.CameraUpdate;
 import ApplicationEVENTS.setup.DisplaySimulator;
 import ApplicationEVENTS.setup.TrafficSignalTimer;
 
@@ -119,12 +120,13 @@ public class AutomaticMenu implements menu {
     private void handleClient(Socket sock) {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()))) {
             String line = in.readLine();
-            int[] data = parseCameraInput(line);
-            int crossing = data[0], lane = data[1], count = data[2];
-            if (crossing > 0 && lane > 0) {
-                latestCounts.put(crossing + "-" + lane, count);
-                System.out.printf("[Received] Crossing %d, Lane %d: Vehicle Count = %d%n",
-                        crossing, lane, count);
+            CameraUpdate update = parseCameraInput(line);
+            if (update != null) {
+                latestCounts.put(
+                    update.getCrossing() + "-" + update.getLane(),
+                    update.getCount()
+                );
+                System.out.printf("[Received] %s%n", update);
             }
         } catch (IOException ignored) {
         } finally {
@@ -133,28 +135,32 @@ public class AutomaticMenu implements menu {
     }
 
     /**
-     * Parses a camera message in format "crossing:1,lane:2,count:5" into {crossing, lane, count}.
+     * Parses a camera message into a CameraUpdate object.
      */
-    private int[] parseCameraInput(String message) {
-        int[] result = new int[3];
-        if (message == null) return result;
+    private CameraUpdate parseCameraInput(String message) {
+        if (message == null) return null;
+        int crossing = 0, lane = 0, count = 0;
         String[] pairs = message.split(",");
         for (String pair : pairs) {
             String[] kv = pair.split(":");
             if (kv.length != 2) continue;
             String key = kv[0].trim().toLowerCase();
-            int val;
-            try { val = Integer.parseInt(kv[1].trim()); }
-            catch (NumberFormatException e) { continue; }
-            switch (key) {
-                case "crossing": result[0] = val; break;
-                case "lane":     result[1] = val; break;
-                case "count":    result[2] = val; break;
-                default: break;
-            }
+            try {
+                int val = Integer.parseInt(kv[1].trim());
+                switch (key) {
+                    case "crossing": crossing = val; break;
+                    case "lane":     lane = val; break;
+                    case "count":    count = val; break;
+                    default: break;
+                }
+            } catch (NumberFormatException ignored) {}
         }
-        return result;
+        if (crossing > 0 && lane > 0) {
+            return new CameraUpdate(crossing, lane, count);
+        }
+        return null;
     }
+
 
     private void sleepSeconds(int seconds) {
         for (int i = 0; i < seconds && running.get(); i++) {
